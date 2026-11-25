@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
     private ExecutorService io = Executors.newSingleThreadExecutor();
     private Handler ui = new Handler(Looper.getMainLooper());
 
-    private TextView headTitle, headMeta, powerBtn, modeBtn, peopleBtn, logView, foundView;
+    private TextView headTitle, headMeta, powerBtn, modeBtn, peopleBtn, logView, foundView, avatarView;
     private LinearLayout results;
     private EditText search;
 
@@ -145,6 +145,14 @@ public class MainActivity extends Activity {
         lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(12);
         col.addView(foundView, lp);
+
+        avatarView = tv("аватарка: —", 11, DIM);
+        avatarView.setTypeface(Typeface.MONOSPACE);
+        avatarView.setBackgroundColor(CARD);
+        avatarView.setPadding(dp(13), dp(11), dp(13), dp(11));
+        lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(10);
+        col.addView(avatarView, lp);
 
         logView = tv("—", 10.5f, Color.parseColor("#767680"));
         logView.setTypeface(Typeface.MONOSPACE);
@@ -405,6 +413,30 @@ public class MainActivity extends Activity {
                     .append(" · боты ").append(inv.optInt("bots", 0))
                     .append(" · личные ").append(inv.optInt("users", 0));
             logView.setText(sb.toString());
+
+            // --- аватарка: только показания. Включение — ИСКЛЮЧИТЕЛЬНО в терминале (tg av arm) ---
+            JSONObject av = (d != null) ? d.optJSONObject("avatar") : null;
+            StringBuilder ab = new StringBuilder("аватарка: ");
+            if (av == null) {
+                ab.append("нет данных демона (в терминале: tg av status)");
+            } else if (av.optBoolean("armed")) {
+                ab.append("АВТОЗАМЕНА ВКЛЮЧЕНА — демон сам возвращает эталон");
+            } else if (av.optBoolean("enabled")) {
+                ab.append("детектор вкл (только лог, не меняет)");
+            } else {
+                ab.append("выключена");
+            }
+            ab.append(" · эталон ").append(av != null && av.optBoolean("ref_saved") ? "есть" : "нет");
+            JSONArray ev = (av != null) ? av.optJSONArray("events") : null;
+            if (ev != null && ev.length() > 0) {
+                JSONObject e = ev.optJSONObject(ev.length() - 1);
+                if (e != null) ab.append(" · посл. ").append(e.optString("t", ""))
+                        .append(" ").append(e.optString("kind", ""))
+                        .append(" → ").append(e.optBoolean("ok") ? "вернул" : e.optString("skipped", e.optString("error", "сбой")));
+            }
+            ab.append(" · включить: tg av arm");
+            avatarView.setText(ab.toString());
+            avatarView.setTextColor(av != null && av.optBoolean("armed") ? RED : DIM);
         });
     }
 
