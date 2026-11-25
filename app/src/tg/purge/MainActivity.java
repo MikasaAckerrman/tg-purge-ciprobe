@@ -52,6 +52,16 @@ public class MainActivity extends Activity {
         s.setAllowContentAccess(false);
         web.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageFinished(WebView v, String url) {
+                // отменить retry, если страница всё-таки поднялась:
+                // иначе мы бы перезагружали рабочий UI каждые 5 с (U-D2/U-D14)
+                if (url != null && url.startsWith("http://127.0.0.1:8790")
+                        && !url.contains("data:text/html")) {
+                    ui.removeCallbacks(retry);
+                }
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 // наружу не ходим: всё взаимодействие только с резидентом
                 return r.getUrl().getHost() != null && !r.getUrl().getHost().equals("127.0.0.1");
@@ -75,10 +85,29 @@ public class MainActivity extends Activity {
         web.loadUrl(URL);
     }
 
-    /** Страница «движок не отвечает» с живым retry: юзер видит причину, а не пустой экран. */
+    /**
+     * Страница «движок не отвечает» с ЖИВЫМ retry (F11).
+     *
+     * Почему retry обязателен здесь, а не в JS: сама страница не грузится, когда
+     * движок лежит, поэтому никакой setInterval внутри HTML работать не может.
+     * Предыдущая версия показывала мёртвый экран с надписью и заставляла юзера
+     * тыкать кнопку руками; теперь шелл сам пробует каждые 5 с и показывает отсчёт.
+     */
+    private final Runnable retry = new Runnable() {
+        @Override public void run() {
+            if (web != null) web.loadUrl(URL);
+        }
+    };
+
+    private void scheduleRetry() {
+        ui.removeCallbacks(retry);
+        ui.postDelayed(retry, 5000);
+    }
+
     private void showDown(String code, String desc) {
         String html = "<!DOCTYPE html><html><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                + "<meta http-equiv='refresh' content='5'>"
                 + "<style>"
                 + "*{margin:0;padding:0;box-sizing:border-box}"
                 + "body{background:#000;color:#ededf0;font:15px/1.45 -apple-system,Roboto,sans-serif;"
@@ -87,7 +116,8 @@ public class MainActivity extends Activity {
                 + "p{color:#7c7c86;font-size:13px;margin-bottom:8px}"
                 + "code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#9fd9b4}"
                 + ".c{border:1px solid #1c1c21;background:#0a0a0c;border-radius:6px;padding:12px;margin:14px 0}"
-                + "a{display:block;text-align:center;margin-top:18px;padding:15px;border-radius:6px;"
+                + ".t{color:#7c7c86;font-size:12px;margin-top:14px}"
+                + "a{display:block;text-align:center;margin-top:14px;padding:15px;border-radius:6px;"
                 + "background:#ededf0;color:#000;font-weight:700;text-decoration:none;letter-spacing:.02em}"
                 + "</style></head><body>"
                 + "<h1>Движок не отвечает</h1>"
@@ -96,10 +126,11 @@ public class MainActivity extends Activity {
                 + "<div class='c'><code>err " + esc(code) + " · " + esc(desc) + "</code></div>"
                 + "<p>Запусти движок в терминале Minis:</p>"
                 + "<div class='c'><code>tg up</code></div>"
-                + "<p>Держать его живым дольше, пока свёрнуто Minis — канал <code>bg_run</code>.</p>"
-                + "<a href='reload'>ПОПРОБОВАТЬ СНОВА</a>"
+                + "<p class='t'>Экран сам обновится через 5 секунд — тыкать не нужно.</p>"
+                + "<a href='reload'>ПРОБОВАТЬ СЕЙЧАС</a>"
                 + "</body></html>";
         web.loadDataWithBaseURL(URL, html, "text/html", "utf-8", URL);
+        scheduleRetry();
     }
 
     private static String esc(String s) {
